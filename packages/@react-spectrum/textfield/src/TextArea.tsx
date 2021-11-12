@@ -10,12 +10,13 @@
  * governing permissions and limitations under the License.
  */
 
-import {chain, useLayoutEffect} from '@react-aria/utils';
+import {chain, useLayoutEffect, useResizeObserver} from '@react-aria/utils';
 import React, {RefObject, useCallback, useRef} from 'react';
 import {SpectrumTextFieldProps, TextFieldRef} from '@react-types/textfield';
 import {TextFieldBase} from './TextFieldBase';
 import {useControlledState} from '@react-stately/utils';
 import {useProviderProps} from '@react-spectrum/provider';
+import {useStyleProps} from '@react-spectrum/utils';
 import {useTextField} from '@react-aria/textfield';
 
 function TextArea(props: SpectrumTextFieldProps, ref: RefObject<TextFieldRef>) {
@@ -29,21 +30,79 @@ function TextArea(props: SpectrumTextFieldProps, ref: RefObject<TextFieldRef>) {
     ...otherProps
   } = props;
 
+  let {labelPosition} = otherProps;
+
+  let fallbackRef = useRef<TextFieldRef>(null);
+  if (!ref) {
+    ref = fallbackRef;
+  }
+
   // not in stately because this is so we know when to re-measure, which is a spectrum design
   let [inputValue, setInputValue] = useControlledState(props.value, props.defaultValue, () => {});
 
   let inputRef = useRef<HTMLTextAreaElement>();
 
+  // Store styleProps to apply styles appropriately on height change.
+  let {styleProps} = useStyleProps(props);
+  let initialHeightsRef = useRef(null);
+
   let onHeightChange = useCallback(() => {
+    let input = inputRef.current;
+    let inputContainer = input.parentElement;
+    let field = ref.current.UNSAFE_getDOMNode();
+
+    // current offsetHeight of the textarea
+    let inputOffsetHeight = input.offsetHeight;
+
+    // Label or helpText height might change, so we have to recalculate
+    let labelHeight = labelPosition !== 'side' && !field.firstElementChild.contains(input) ? (field.firstElementChild as HTMLElement).offsetHeight : 0;
+    
+    // With labelPosition === 'side', the TextArea and HelpText will be contained within a wrapper.
+    let fieldWrapper = labelPosition === 'side' ? field.lastElementChild : field;
+    let helpTextHeight = !fieldWrapper.lastElementChild.contains(input) ? (fieldWrapper.lastElementChild as HTMLElement).offsetHeight : 0;
+
+    // store a ref containing the initial size values for comparison
+    if (initialHeightsRef.current === null) {
+      initialHeightsRef.current = {
+        inputHeight: inputOffsetHeight,
+        fieldHeight: field.offsetHeight
+      };
+    }
+    let {inputHeight, fieldHeight} = initialHeightsRef.current;
+    let calculatedFieldHeight = Math.max(inputHeight, inputOffsetHeight) + labelHeight + helpTextHeight;
     if (isQuiet) {
-      let input = inputRef.current;
       let prevAlignment = input.style.alignSelf;
       input.style.alignSelf = 'start';
       input.style.height = 'auto';
-      input.style.height = `${input.scrollHeight}px`;
+      input.style.height = `${Math.max(input.scrollHeight, inputHeight)}px`;
       input.style.alignSelf = prevAlignment;
+      inputContainer.style.flexGrow = '0';
+      for (const [key, value] of Object.entries(styleProps.style)) {
+        switch (key) {
+          case 'height':
+          case 'maxHeight':
+            field.style[key] = calculatedFieldHeight <= fieldHeight ? value : '';
+            break;
+        }
+      }
+    } else {  
+      for (const [key, value] of Object.entries(styleProps.style)) {
+        switch (key) {
+          case 'height':
+            if (inputOffsetHeight < inputHeight) {
+              field.style[key] = `${helpTextHeight + inputOffsetHeight + labelHeight}px`;
+            } else {
+              field.style[key] = calculatedFieldHeight <= fieldHeight ? value : `${calculatedFieldHeight}px`;
+            }
+            break;
+          case 'minHeight':
+          case 'maxHeight':
+            input.style[key] = `calc(${value} - ${labelHeight + helpTextHeight}px)`;
+            break;
+        }
+      }
     }
-  }, [isQuiet, inputRef]);
+  }, [isQuiet, inputRef, ref, styleProps, labelPosition]);
 
   useLayoutEffect(() => {
     if (inputRef.current) {
@@ -51,6 +110,11 @@ function TextArea(props: SpectrumTextFieldProps, ref: RefObject<TextFieldRef>) {
     }
   }, [onHeightChange, inputValue, inputRef]);
 
+  // captures drag to resize events user events
+  useResizeObserver({
+    ref: inputRef,
+    onResize: onHeightChange
+  });
 
   let {labelProps, inputProps, descriptionProps, errorMessageProps} = useTextField({
     ...props,

@@ -14,7 +14,7 @@ import {Flex} from '@react-spectrum/layout';
 import React, {useState} from 'react';
 import {SpectrumTextFieldProps} from '@react-types/textfield';
 import {storiesOf} from '@storybook/react';
-import {TextField} from '@react-spectrum/textfield';
+import {TextArea, TextField} from '@react-spectrum/textfield';
 
 storiesOf('HelpText', module)
   .addParameters({providerSwitcher: {status: 'positive'}})
@@ -134,6 +134,24 @@ storiesOf('HelpText', module)
       width: '440px',
       labelPosition: 'side'
     })
+  )
+  .add(
+    'custom height size-2000, maxHeight 400px, labelPosition: side',
+    () => {
+      let [value, setValue] = useState('');
+      return (
+        <TextArea
+          labelPosition="side"
+          label="Empty field"
+          height="size-2000"
+          maxHeight="400px"
+          description="This input is only valid when it's empty."
+          errorMessage="Remove input."
+          value={value}
+          onChange={setValue}
+          validationState={value.length ? 'invalid' : undefined} />
+      );
+    }
   )
   .add(
     'description and custom description',
