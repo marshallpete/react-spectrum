@@ -16,7 +16,7 @@
 // See https://github.com/facebook/react/tree/cc7c1aece46a6b69b41958d731e0fd27c94bfc6c/packages/react-interactions
 
 import {disableTextSelection, restoreTextSelection} from './textSelection';
-import {focusWithoutScrolling, mergeProps, useGlobalListeners, useSyncRef} from '@react-aria/utils';
+import {focusWithoutScrolling, isIOS, mergeProps, useGlobalListeners, useSyncRef} from '@react-aria/utils';
 import {HTMLAttributes, RefObject, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {isVirtualClick} from './utils';
 import {PointerType, PressEvents} from '@react-types/shared';
@@ -35,9 +35,7 @@ export interface PressProps extends PressEvents {
    * still pressed, onPressStart will be fired again. If set to `true`, the press is canceled
    * when the pointer leaves the target and onPressStart will not be fired if the pointer returns.
    */
-  shouldCancelOnPointerExit?: boolean,
-  /** Whether text selection should be enabled on the pressable element. */
-  allowTextSelectionOnPress?: boolean
+  shouldCancelOnPointerExit?: boolean
 }
 
 export interface PressHookProps extends PressProps {
@@ -101,7 +99,6 @@ export function usePress(props: PressHookProps): PressResult {
     isPressed: isPressedProp,
     preventFocusOnPress,
     shouldCancelOnPointerExit,
-    allowTextSelectionOnPress,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ref: _, // Removing `ref` from `domProps` because TypeScript is dumb,
     ...domProps
@@ -220,9 +217,7 @@ export function usePress(props: PressHookProps): PressResult {
         state.activePointerId = null;
         state.pointerType = null;
         removeAllGlobalListeners();
-        if (!allowTextSelectionOnPress) {
-          restoreTextSelection(state.target);
-        }
+        restoreTextSelection();
       }
     };
 
@@ -327,10 +322,7 @@ export function usePress(props: PressHookProps): PressResult {
             focusWithoutScrolling(e.currentTarget);
           }
 
-          if (!allowTextSelectionOnPress) {
-            disableTextSelection(state.target);
-          }
-
+          disableTextSelection();
           triggerPressStart(e, state.pointerType);
 
           addGlobalListener(document, 'pointermove', onPointerMove, false);
@@ -404,9 +396,7 @@ export function usePress(props: PressHookProps): PressResult {
           state.activePointerId = null;
           state.pointerType = null;
           removeAllGlobalListeners();
-          if (!allowTextSelectionOnPress) {
-            restoreTextSelection(state.target);
-          }
+          restoreTextSelection();
         }
       };
 
@@ -537,10 +527,7 @@ export function usePress(props: PressHookProps): PressResult {
           focusWithoutScrolling(e.currentTarget);
         }
 
-        if (!allowTextSelectionOnPress) {
-          disableTextSelection(state.target);
-        }
-
+        disableTextSelection();
         triggerPressStart(e, state.pointerType);
 
         addGlobalListener(window, 'scroll', onScroll, true);
@@ -593,9 +580,7 @@ export function usePress(props: PressHookProps): PressResult {
         state.activePointerId = null;
         state.isOverTarget = false;
         state.ignoreEmulatedMouseEvents = true;
-        if (!allowTextSelectionOnPress) {
-          restoreTextSelection(state.target);
-        }
+        restoreTextSelection();
         removeAllGlobalListeners();
       };
 
@@ -632,21 +617,18 @@ export function usePress(props: PressHookProps): PressResult {
     }
 
     return pressProps;
-  }, [addGlobalListener, isDisabled, preventFocusOnPress, removeAllGlobalListeners, allowTextSelectionOnPress]);
+  }, [addGlobalListener, isDisabled, preventFocusOnPress, removeAllGlobalListeners]);
 
   // Remove user-select: none in case component unmounts immediately after pressStart
   // eslint-disable-next-line arrow-body-style
   useEffect(() => {
-    return () => {
-      if (!allowTextSelectionOnPress) {
-        restoreTextSelection(ref.current.target);
-      }
-    };
-  }, [allowTextSelectionOnPress]);
+    return () => restoreTextSelection();
+  }, []);
 
   return {
     isPressed: isPressedProp || isPressed,
-    pressProps: mergeProps(domProps, pressProps)
+    // Apply userSelect: none to the element when pressed to prevent text selection. iOS case handled via disableTextSelection
+    pressProps: mergeProps(domProps, pressProps, isPressed && !isIOS() ? {style: {userSelect: 'none'}} : {})
   };
 }
 

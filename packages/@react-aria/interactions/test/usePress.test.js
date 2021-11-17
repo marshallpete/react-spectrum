@@ -23,7 +23,7 @@ import {usePress} from '../';
 function Example(props) {
   let {elementType: ElementType = 'div', style, ...otherProps} = props;
   let {pressProps} = usePress(otherProps);
-  return <ElementType {...pressProps} style={style} tabIndex="0">test</ElementType>;
+  return <ElementType style={style} {...pressProps} tabIndex="0">test</ElementType>;
 }
 
 function pointerEvent(type, opts) {
